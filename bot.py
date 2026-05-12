@@ -45,26 +45,31 @@ def save_data(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def get_user(user_id):
+    """Получает данные пользователя, создаёт если нет"""
     data = load_data()
     uid = str(user_id)
     if uid not in data["users"]:
         data["users"][uid] = {
-            "questions_left": 1,
+            "questions_left": 1,      # ← КЛЮЧЕВОЕ ПОЛЕ
             "last_free_date": None,
             "total_asked": 0
         }
         save_data(data)
+        print(f"🆕 Создан новый пользователь {uid}: 1 вопрос")
     return data["users"][uid]
 
 def update_user(user_id, key, value):
+    """Обновляет поле пользователя"""
     data = load_data()
     uid = str(user_id)
     if uid not in data["users"]:
         get_user(user_id)
     data["users"][uid][key] = value
     save_data(data)
+    print(f"📝 Обновлён пользователь {uid}: {key} = {value}")
 
 def can_get_free(user_id):
+    """Проверяет, можно ли дать бесплатный вопрос"""
     user = get_user(user_id)
     last = user.get("last_free_date")
     if not last:
@@ -76,8 +81,13 @@ def can_get_free(user_id):
         return True
 
 def use_free_question(user_id):
+    """Использовать бесплатный вопрос (возвращает True если успешно)"""
     if can_get_free(user_id):
         update_user(user_id, "last_free_date", datetime.now().isoformat())
+        # Бесплатный вопрос не списывает из questions_left, а даёт +1 отдельно
+        user = get_user(user_id)
+        update_user(user_id, "questions_left", user["questions_left"] + 1)
+        print(f"🎁 Пользователь {user_id} активировал бесплатный вопрос")
         return True
     return False
 
@@ -89,30 +99,25 @@ class TarotState(StatesGroup):
     waiting_category = State()
 
 # =========================
-# ВСЕ 78 КАРТ ТАРО УЭЙТА (полный список)
+# ВСЕ 78 КАРТ ТАРО УЭЙТА
 # =========================
 all_cards = [
-    # Старшие арканы (22)
     "Шут", "Маг", "Верховная Жрица", "Императрица", "Император",
     "Иерофант", "Влюблённые", "Колесница", "Сила", "Отшельник",
     "Колесо Фортуны", "Справедливость", "Повешенный", "Смерть",
     "Умеренность", "Дьявол", "Башня", "Звезда", "Луна", "Солнце", "Суд", "Мир",
-    # Жезлы (14)
     "Туз Жезлов", "Двойка Жезлов", "Тройка Жезлов", "Четвёрка Жезлов",
     "Пятёрка Жезлов", "Шестёрка Жезлов", "Семёрка Жезлов", "Восьмёрка Жезлов",
     "Девятка Жезлов", "Десятка Жезлов", "Паж Жезлов", "Рыцарь Жезлов",
     "Королева Жезлов", "Король Жезлов",
-    # Кубки (14)
     "Туз Кубков", "Двойка Кубков", "Тройка Кубков", "Четвёрка Кубков",
     "Пятёрка Кубков", "Шестёрка Кубков", "Семёрка Кубков", "Восьмёрка Кубков",
     "Девятка Кубков", "Десятка Кубков", "Паж Кубков", "Рыцарь Кубков",
     "Королева Кубков", "Король Кубков",
-    # Мечи (14)
     "Туз Мечей", "Двойка Мечей", "Тройка Мечей", "Четвёрка Мечей",
     "Пятёрка Мечей", "Шестёрка Мечей", "Семёрка Мечей", "Восьмёрка Мечей",
     "Девятка Мечей", "Десятка Мечей", "Паж Мечей", "Рыцарь Мечей",
     "Королева Мечей", "Король Мечей",
-    # Пентакли (14)
     "Туз Пентаклей", "Двойка Пентаклей", "Тройка Пентаклей", "Четвёрка Пентаклей",
     "Пятёрка Пентаклей", "Шестёрка Пентаклей", "Семёрка Пентаклей", "Восьмёрка Пентаклей",
     "Девятка Пентаклей", "Десятка Пентаклей", "Паж Пентаклей", "Рыцарь Пентаклей",
@@ -120,18 +125,14 @@ all_cards = [
 ]
 
 # =========================
-# AI ФУНКЦИЯ (С ПРИНУДИТЕЛЬНЫМ ВЫБОРОМ КАРТЫ)
+# AI ФУНКЦИЯ
 # =========================
 async def get_ai_tarot_reading(question, category):
-    """Получает расклад со случайной картой из 78"""
-    
-    # Принудительно выбираем случайную карту
     selected_card = random.choice(all_cards)
     is_reversed = random.choice([True, False])
     position = "перевёрнутая" if is_reversed else "прямая"
     
-    system_prompt = """Ты — таролог. Твоя задача — истолковать карту Таро.
-Отвечай на русском, 3-4 абзаца. Пиши от первого лица.
+    system_prompt = """Ты — таролог. Отвечай на русском, 3-4 абзаца. Пиши от первого лица.
 Будь мудрым, эмпатичным, но по делу. Дай ответ на вопрос человека и короткий совет."""
     
     category_names = {
@@ -141,15 +142,12 @@ async def get_ai_tarot_reading(question, category):
         "general": "общую ситуацию"
     }
     
-    user_prompt = f"""Сделай расклад Таро.
-
-Выпавшая карта: {selected_card}
+    user_prompt = f"""Выпавшая карта: {selected_card}
 Положение: {position}
 Тема: {category_names.get(category, 'общая ситуация')}
 Вопрос: {question}
 
-Напиши трактовку этой карты применительно к вопросу.
-Напиши от лица таролога. 3-4 абзаца. В конце короткий совет."""
+Напиши трактовку этой карты применительно к вопросу. 3-4 абзаца. В конце короткий совет."""
     
     try:
         response = await asyncio.get_event_loop().run_in_executor(
@@ -166,11 +164,10 @@ async def get_ai_tarot_reading(question, category):
             )
         )
         ai_text = response.choices[0].message.content
-        # Добавляем название карты в начало
-        return f"🃏 **{selected_card}** ({position})\n\n{ai_text}", selected_card, position
+        return f"🃏 **{selected_card}** ({position})\n\n{ai_text}"
     except Exception as e:
         print(f"AI ошибка: {e}")
-        return None, None, None
+        return None
 
 # =========================
 # КЛАВИАТУРЫ
@@ -224,7 +221,8 @@ async def start_web_app():
 @dp.message(CommandStart())
 async def start(message: types.Message):
     uid = message.from_user.id
-    get_user(uid)
+    user = get_user(uid)
+    print(f"📊 Старт пользователя {uid}: баланс = {user['questions_left']}")
     await message.answer(
         "🔮 **Добро пожаловать в Таро Уэйта** 🔮\n\n"
         "В моей колоде 78 карт. Каждый расклад уникален.\n\n"
@@ -232,7 +230,7 @@ async def start(message: types.Message):
         "1. Выбери категорию\n"
         "2. Задай вопрос\n"
         "3. Я вытяну карту и растолкую её\n\n"
-        "🎁 **1 вопрос бесплатно каждый день!**\n\n"
+        "🎁 **1 бесплатный вопрос при регистрации!**\n\n"
         "Начни прямо сейчас 👇",
         reply_markup=main_menu,
         parse_mode="Markdown"
@@ -269,6 +267,7 @@ async def help_menu(callback: CallbackQuery):
 async def show_balance(callback: CallbackQuery):
     uid = callback.from_user.id
     user = get_user(uid)
+    print(f"📊 Баланс {uid}: {user['questions_left']}")
     await callback.message.edit_text(
         f"💎 **Твой баланс**\n\n"
         f"🎴 Осталось вопросов: **{user['questions_left']}**\n"
@@ -347,9 +346,11 @@ async def process_question(message: types.Message, state: FSMContext):
     is_free = data.get("is_free", False)
     question = message.text.strip()
     
+    # Получаем актуальные данные пользователя
     user = get_user(uid)
+    print(f"📊 Перед списанием: пользователь {uid}, баланс = {user['questions_left']}, is_free = {is_free}")
     
-    # Проверка баланса
+    # Проверка баланса (только для платных вопросов)
     if not is_free and user["questions_left"] <= 0:
         await message.answer(
             "❌ **Закончились вопросы!**\n\n"
@@ -366,11 +367,15 @@ async def process_question(message: types.Message, state: FSMContext):
         await state.clear()
         return
     
-    # Списываем вопрос
+    # Списываем вопрос (только для платных)
+    remaining = user["questions_left"]
     if not is_free:
-        new_balance = user["questions_left"] - 1
-        update_user(uid, "questions_left", new_balance)
+        remaining = user["questions_left"] - 1
+        update_user(uid, "questions_left", remaining)
         update_user(uid, "total_asked", user.get("total_asked", 0) + 1)
+        print(f"✅ Списано: пользователь {uid}, новый баланс = {remaining}")
+    else:
+        print(f"🎁 Бесплатный вопрос: пользователь {uid}, баланс не меняется")
     
     # Отправляем статус
     await bot.send_chat_action(uid, action="typing")
@@ -378,14 +383,13 @@ async def process_question(message: types.Message, state: FSMContext):
     # Получаем AI-ответ
     msg = await message.answer("🔮 *Перемешиваю колоду...*\n🃏 *Вытягиваю карту...*\n🌙 *Карта говорит...*\n\n", parse_mode="Markdown")
     
-    reading, card_name, position = await get_ai_tarot_reading(question, category)
+    reading = await get_ai_tarot_reading(question, category)
     
     if reading:
         final_text = f"✨ **Ваш расклад** ✨\n\n{reading}\n\n"
         
         # Мягкий призыв купить вопросы
         if not is_free:
-            remaining = new_balance
             final_text += f"📊 Осталось вопросов: {remaining}\n"
             
             if remaining <= 2:
@@ -485,6 +489,7 @@ async def admin_help(message: types.Message):
         "👑 **Админ-панель**\n\n"
         "/add_questions `ID` `кол-во` — начислить вопросы\n"
         "/all_users — список пользователей\n"
+        "/give_free `ID` — дать бесплатный вопрос\n"
         "/admin — помощь",
         parse_mode="Markdown"
     )
@@ -505,6 +510,22 @@ async def add_questions_cmd(message: types.Message):
     except:
         await message.answer("❌ Ошибка. Формат: `/add_questions ID КОЛИЧЕСТВО`", parse_mode="Markdown")
 
+@dp.message(Command("give_free"))
+async def give_free_cmd(message: types.Message):
+    """Админ может дать бесплатный вопрос любому пользователю"""
+    if message.from_user.id != ADMIN_ID:
+        return
+    try:
+        parts = message.text.split()
+        uid = int(parts[1])
+        user = get_user(uid)
+        new_bal = user["questions_left"] + 1
+        update_user(uid, "questions_left", new_bal)
+        await message.answer(f"✅ Добавлен 1 бесплатный вопрос пользователю `{uid}`. Новый баланс: {new_bal}", parse_mode="Markdown")
+        await bot.send_message(uid, f"🎁 **Бесплатный вопрос!**\n\nАдминистратор добавил вам **1 вопрос** в подарок!\nТвой баланс: **{new_bal}**.\n\nПриятного гадания 🌙", parse_mode="Markdown")
+    except:
+        await message.answer("❌ Ошибка. Формат: `/give_free ID`", parse_mode="Markdown")
+
 @dp.message(Command("all_users"))
 async def all_users_cmd(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -522,13 +543,21 @@ async def all_users_cmd(message: types.Message):
     if text:
         await message.answer(text[:4000], parse_mode="Markdown")
 
+@dp.message(Command("reset_all"))
+async def reset_all_cmd(message: types.Message):
+    """Сброс всех данных (только для админа, осторожно!)"""
+    if message.from_user.id != ADMIN_ID:
+        return
+    save_data({"users": {}})
+    await message.answer("⚠️ **Все данные сброшены!** Все пользователи удалены.", parse_mode="Markdown")
+
 # =========================
 # ЗАПУСК
 # =========================
 async def main():
     await start_web_app()
     await bot.delete_webhook(drop_pending_updates=True)
-    print("✅ Бот Таро с 78 картами и пингом запущен!")
+    print("✅ Бот Таро с 78 картами и корректным балансом запущен!")
     print(f"👑 Админ ID: {ADMIN_ID}")
     await dp.start_polling(bot)
 
